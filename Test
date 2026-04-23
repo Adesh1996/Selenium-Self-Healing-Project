@@ -1,0 +1,218 @@
+h1. FGW Test Automation – CI/CD Pipeline Documentation
+
+----
+
+h2. 🔭 Detailed Overview
+
+The *FGW Test Automation Pipeline* is designed with a *decoupled architecture*, where *build and execution are separated* to improve efficiency, reduce redundant builds, and enable flexible test execution.
+
+Unlike traditional pipelines where build and execution happen together, this pipeline supports *multiple execution modes* based on:
+
+* Trigger type (Merge / Manual / Schedule)
+* Branch (Master / Feature)
+
+This approach ensures:
+* Faster execution for testing (no rebuild needed for master runs)
+* Reusability of artifacts via Nexus
+* Flexibility for developers to test independently on feature branches
+* Controlled release artifact generation only on master merges
+
+---
+
+h3. 🚀 Key Design Principles
+
+* *Decoupled Build & Run* → Build happens only during master merge
+* *Artifact Reuse* → Master run downloads JAR from Nexus instead of rebuilding
+* *Environment Flexibility* → Same JAR can be reused across executions
+* *Controlled Deployment* → Only master branch publishes artifacts
+* *Developer Independence* → Feature branches run without Nexus dependency
+
+---
+
+h2. ⚡ Pipeline Execution Modes
+
+|| Trigger Type || Branch || Stages Executed || JAR Source ||
+| Merge (CI Trigger) | master | preparation → build → upload | Generated & uploaded to Nexus |
+| Manual / Schedule | master | run → notify | Downloaded from Nexus |
+| Manual / Schedule | feature | build → run → notify | Built within pipeline |
+
+---
+
+h2. 🔀 Workflow Logic
+
+Pipeline behavior depends on both *branch* and *trigger type*:
+
+* *Merge to master*
+** Executes build pipeline
+** Stages: preparation → build → upload
+** Publishes JAR to Nexus
+** No test execution
+
+* *Manual trigger on master*
+** Executes test pipeline
+** Stages: run → notify
+** JAR is downloaded from Nexus
+
+* *Manual trigger on feature branch*
+** Executes full pipeline
+** Stages: build → run → notify
+** JAR is built within pipeline
+
+* *Feature branch push*
+** Pipeline is *not triggered*
+
+---
+
+h2. 🧱 Stage Definitions
+
+|| Stage || Description || Used In ||
+| preparation | Prepares environment and validates project | Master merge / Feature |
+| build | Builds JAR using Maven | Master merge / Feature |
+| upload | Uploads JAR to Nexus | Master merge only |
+| run | Executes fgw-injector JAR | Manual pipelines |
+| notify | Sends email with results | All manual runs |
+
+---
+
+h2. 🗺️ End-to-End Pipeline Flow
+
+{code:theme=Default}
+Trigger Event
+   |
+   v
++-----------------------+
+|   Merge to Master     |
++-----------------------+
+   |
+   v
+Preparation → Build → Upload → Nexus
+
+
++-----------------------+
+| Manual (Master)       |
++-----------------------+
+   |
+   v
+Download JAR → Run → Notify
+
+
++-----------------------+
+| Manual (Feature)      |
++-----------------------+
+   |
+   v
+Build → Run → Notify
+{code}
+
+---
+
+h2. 🟢 Master Pipeline
+
+h3. 1. Merge to Master (CI Trigger)
+
+* Executes:
+** preparation → build → upload
+* Generates JAR file
+* Uploads artifact to Nexus repository
+* Does NOT execute tests
+
+---
+
+h3. 2. Manual / Scheduled Run (Master)
+
+* Executes:
+** run → notify
+* Downloads JAR from Nexus
+* Executes test workflows using fgw-injector
+* Sends email notification
+
+---
+
+h2. 🔵 Feature Pipeline
+
+Feature pipelines are used for *development-level testing*.
+
+* Executes:
+** build → run → notify
+* JAR is built inside pipeline
+* No interaction with Nexus
+* Faster for iterative testing
+
+---
+
+h2. 📧 Notification Logic
+
+Email notifications are sent after pipeline execution.
+
+|| Pipeline Type || Recipients || Notes ||
+| Master (Manual) | DEV + TEST Team | Includes full test results |
+| Feature | DEV Team Only | For development testing |
+
+* Email subject changes based on trigger type
+* Logs are attached as ZIP file
+
+---
+
+h2. ⚙️ Pipeline Variables
+
+|| Variable || Description ||
+| EXECUTION_MODE | Controls pipeline behavior (DEV_TRIGGER / WEB / SCHEDULE) |
+| JARArgument1 | Selects test workflow (C2B, E2E, etc.) |
+
+---
+
+h2. 🧪 Supported Test Workflows
+
+The pipeline supports multiple workflows via *JARArgument1*:
+
+* C2B-Workflow
+* E2E-Workflow
+* B2B-Passthrough
+* Negative-PSR
+* SAM-Workflow
+* UIValidation
+* OFMT / OFMT1 / OFMT2
+* ACSP-Workflow
+
+---
+
+h2. 📖 Run Instructions
+
+h3. Feature Pipeline Execution
+
+# Go to *GitLab → CI/CD → Pipelines*
+# Click *Run Pipeline*
+# Select feature branch
+# Provide *JARArgument1*
+# Click *Run*
+# Monitor logs
+# Check email for results
+
+---
+
+h3. Master Test Execution
+
+# Go to *Run Pipeline*
+# Select *master branch*
+# Trigger pipeline
+# JAR will be downloaded from Nexus
+# Execution starts
+# Email sent after completion
+
+---
+
+h2. ⚠️ Important Notes
+
+* Feature branch push does NOT trigger pipeline
+* JAR artifact expires (if using pipeline artifact)
+* Master pipeline always uses Nexus artifact
+* Build is NOT triggered during manual master execution
+
+---
+
+h2. ✅ Summary
+
+* Master Merge → Build & Upload
+* Master Manual → Run using Nexus JAR
+* Feature → Build + Run
+* Pipeline behavior is fully controlled via trigger + branch
