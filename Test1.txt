@@ -1,0 +1,295 @@
+h1. FGW Test Automation – CI/CD Pipeline Documentation
+
+----
+
+h2. 🔭 Detailed Overview
+
+The *FGW Test Automation Pipeline* is designed using a *decoupled CI/CD architecture*, where *artifact creation (build)* and *test execution (run)* are separated.
+
+This design enables:
+* Efficient reuse of artifacts
+* Faster test execution cycles
+* Reduced infrastructure load
+* Better control over release artifacts
+
+The pipeline dynamically changes its behavior based on:
+* *Branch* → master vs feature
+* *Trigger type* → merge, manual, scheduled, or downstream (dev pipeline)
+
+---
+
+h3. 🧠 Architecture Concept
+
+Instead of rebuilding the application every time tests are executed:
+
+* Build happens only when code is merged to *master*
+* The generated JAR is stored in *Nexus Repository*
+* Test pipelines reuse this JAR for execution
+
+This ensures:
+* Consistency between deployed and tested artifact
+* Elimination of duplicate builds
+* Faster feedback cycles
+
+---
+
+h2. 🔗 Integration with Dev Pipeline
+
+The test pipeline is tightly integrated with the *development (dev) pipeline* to enable automated validation after deployment.
+
+h3. 🔄 Integration Flow
+
+# Dev pipeline completes deployment
+# Dev pipeline triggers test pipeline (downstream trigger)
+# Test pipeline executes *sanity / regression tests*
+# Results are shared with both *Dev and Test teams*
+
+h3. 🎯 Key Behavior
+
+* Trigger source = *pipeline*
+* Execution mode = *DEV_TRIGGER*
+* Runs on *master branch*
+* Uses *artifact already uploaded to Nexus*
+* Skips build stage completely
+
+---
+
+h3. 📌 Why this Integration is Important
+
+* Ensures every deployment is automatically validated
+* Eliminates manual test triggering
+* Enables faster defect detection
+* Provides immediate feedback to developers
+
+---
+
+h2. ⚡ Pipeline Execution Modes
+
+|| Trigger Type || Branch || Stages Executed || JAR Source || Use Case ||
+| Merge (CI Trigger) | master | preparation → build → upload | Generated & stored in Nexus | Artifact creation |
+| Dev Pipeline Trigger | master | run → notify | Downloaded from Nexus | Post-deployment validation |
+| Manual / Schedule | master | run → notify | Downloaded from Nexus | Regression / sanity testing |
+| Manual / Schedule | feature | build → run → notify | Built within pipeline | Developer testing |
+
+---
+
+h2. 🔀 Workflow Logic
+
+Pipeline execution is controlled using *GitLab workflow rules*.
+
+h3. Behavior Summary
+
+* *Merge to master*
+** Triggers build pipeline
+** Creates deployable artifact
+** Uploads to Nexus
+
+* *Dev pipeline trigger*
+** Executes test pipeline automatically
+** Uses Nexus artifact
+** Sends notification to Dev + Test
+
+* *Manual master trigger*
+** Executes tests without rebuilding
+** Faster execution
+
+* *Feature branch trigger*
+** Full pipeline execution
+** Independent developer testing
+
+* *Feature push*
+** Pipeline is *not triggered*
+
+---
+
+h2. 🧱 Stage Definitions
+
+|| Stage || Description || Execution Context ||
+| preparation | Environment setup, validation | Master merge / Feature |
+| build | Maven build (creates JAR) | Master merge / Feature |
+| upload | Upload JAR to Nexus | Master merge only |
+| run | Execute fgw-injector JAR | Manual / Dev trigger |
+| notify | Send execution results via email | All run pipelines |
+
+---
+
+h2. 🗺️ End-to-End Pipeline Flow
+
+{code:theme=Default}
+                    +----------------------+
+                    |   Merge to Master    |
+                    +----------------------+
+                              |
+                              v
+             Preparation → Build → Upload → Nexus
+
+
+        +-----------------------------+
+        | Dev Pipeline Trigger        |
+        +-----------------------------+
+                      |
+                      v
+        Download JAR → Run → Notify
+
+
+        +-----------------------------+
+        | Manual Master Execution     |
+        +-----------------------------+
+                      |
+                      v
+        Download JAR → Run → Notify
+
+
+        +-----------------------------+
+        | Feature Branch Execution    |
+        +-----------------------------+
+                      |
+                      v
+        Build → Run → Notify
+{code}
+
+---
+
+h2. 🟢 Master Pipeline
+
+h3. 1. Merge to Master
+
+* Purpose: *Artifact creation*
+* Stages:
+** preparation → build → upload
+* Output:
+** JAR stored in Nexus repository
+* No test execution performed
+
+---
+
+h3. 2. Dev / Manual / Scheduled Execution
+
+* Purpose: *Test execution*
+* Stages:
+** run → notify
+* Behavior:
+** Downloads JAR from Nexus
+** Executes selected workflow
+** Sends notification email
+
+---
+
+h2. 🔵 Feature Pipeline
+
+* Purpose: *Development testing*
+
+* Stages:
+** build → run → notify
+
+* Characteristics:
+** No Nexus interaction
+** Faster execution
+** Fully isolated from master pipeline
+
+---
+
+h2. 📧 Notification System
+
+|| Scenario || Recipients || Description ||
+| Dev Trigger | DEV + TEST | Post deployment validation |
+| Manual Master | DEV + TEST | Regression / sanity |
+| Feature | DEV only | Development testing |
+
+* Email contains:
+** Execution logs (ZIP)
+** Status summary
+** Workflow executed
+
+* Subject line dynamically changes based on trigger type
+
+---
+
+h2. ⚙️ Pipeline Variables
+
+|| Variable || Description ||
+| EXECUTION_MODE | Defines trigger source (DEV_TRIGGER / WEB / SCHEDULE) |
+| JARArgument1 | Selects workflow type |
+| PIPELINE_MODE | Determines master vs feature behavior |
+
+---
+
+h2. 🧪 Supported Test Workflows
+
+* C2B-Workflow
+* E2E-Workflow
+* B2B-Passthrough
+* Negative-PSR
+* SAM-Workflow
+* UIValidation
+* OFMT / OFMT1 / OFMT2
+* ACSP-Workflow
+
+---
+
+h2. 📖 Run Instructions
+
+h3. Feature Execution
+
+# Go to *GitLab → Run Pipeline*
+# Select feature branch
+# Set JARArgument1
+# Run pipeline
+
+---
+
+h3. Master Execution (Manual)
+
+# Select master branch
+# Run pipeline
+# JAR is fetched from Nexus
+# Execution starts
+
+---
+
+h3. Dev Integration Execution
+
+* Triggered automatically from dev pipeline
+* No manual action required
+* Used for sanity validation
+
+---
+
+h2. ⚠️ Important Notes
+
+* Feature push does NOT trigger pipeline
+* Master pipeline separates build and run
+* Nexus is single source of truth for artifacts
+* Build is skipped during test execution
+
+---
+
+h2. 📊 Impact
+
+* Reduced build time significantly
+* Faster test execution cycles
+* Improved pipeline efficiency
+* Reduced infrastructure usage
+* Standardized artifact usage across environments
+
+---
+
+h2. 🚀 Benefits
+
+* *Performance* → No redundant builds
+* *Consistency* → Same artifact used for deployment & testing
+* *Scalability* → Supports multiple execution modes
+* *Flexibility* → Manual + automated triggers supported
+* *Reliability* → Automated validation after deployment
+* *Developer Productivity* → Faster feedback loops
+
+---
+
+h2. ✅ Summary
+
+* Master Merge → Build + Upload to Nexus
+* Dev Trigger → Automated test execution
+* Manual Master → Reuse artifact for testing
+* Feature → Build + Run independently
+
+Pipeline is optimized for *speed, reuse, and automation*.
